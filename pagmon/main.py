@@ -1,5 +1,6 @@
-import httpx
 import configparser
+
+import httpx
 
 config = configparser.ConfigParser()
 config.read("config.ini")
