@@ -75,6 +75,11 @@ def save_heart_rate(hr):
 
 def run():
     """Run the program."""
+    print("Starting Pulsoid Heartrate Monitor...")
+    print("Press Ctrl+C to exit.")
+    print("")
+    print("Love you bro <3")
+    print("")
     process_ini_file()
     pulsoid = Pulsoid()
 
