@@ -2,7 +2,7 @@
 name = "pagmon"
 version = "0.1.0"
 description = ""
-authors = ["Wyko ter Haar <wyko.ter.haar@ing.com>"]
+authors = ["Wyko ter Haar <wyko.ter.haar@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
