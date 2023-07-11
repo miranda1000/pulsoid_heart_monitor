@@ -3,7 +3,7 @@
 
 A simple script that checks Pulsoid for heart rate data and injects the current rate into a text file. 
 
-## Pre-requisites
+## Prerequisites
 - Python 3.11 or higher
 - Git
 - A Pulsoid API token
