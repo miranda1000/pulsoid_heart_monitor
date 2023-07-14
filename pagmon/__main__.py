@@ -1,17 +1,39 @@
 import configparser
-
-import httpx
 import time
 
-config = configparser.ConfigParser()
+import httpx
+
+config = configparser.ConfigParser(allow_no_value=True)
 
 
 class Pulsoid:
     def __init__(self):
         """Initialize the Pulsoid class."""
-        self.token = config["Login"]["API_TOKEN"]
+        self.token = config["Login"]["api_token"]
         self._get_client()
         self._validate_token()
+        self._start_time = time.monotonic()
+        self._current_ramping_multiplier = 1.0
+        self._ramping_max_multiplier = float(config["Settings"]["ramping_max_multiplier"])
+        self._seconds_to_max_ramping = float(config["Settings"]["seconds_till_max_ramping"])
+        self._ramping_mode = config["Settings"]["ramping_mode"].lower() == "true"
+        self._polling_interval = float(config["Settings"]["polling_interval"])
+        self._smoothing_interval = float(config["Settings"]["smoothing_interval"])
+        self._base_multiplier = float(config["Settings"]["base_multiplier"])
+
+        self._polls_within_interval: list[tuple[float, int]] = []
+        """A list of tuples containing the time and heart rate of each poll within the smoothing interval."""
+
+    def _get_smoothed_heartrate(self) -> int:
+        """Get the smoothed heartrate."""
+        if len(self._polls_within_interval) == 0:
+            return 0
+
+        total_heartrate = sum([poll[1] for poll in self._polls_within_interval])
+        average_heartrate = total_heartrate // len(self._polls_within_interval)
+
+        # print(f"Smoothed HR: {average_heartrate} (Avg of {len(self._polls_within_interval)}) polls")
+        return average_heartrate
 
     def get_heartrate(self):
         """Get the current heart rate."""
@@ -23,6 +45,61 @@ class Pulsoid:
             return None
 
         return r.json()["data"]["heart_rate"]
+
+    def run(self):
+        while True:
+            time.sleep(self._polling_interval)
+            if not (hr := self.get_heartrate()):
+                print("Failed to get heart rate.")
+                continue
+            self._set_current_ramping_multiplier()
+            self._populate_polls_within_interval(hr)
+            smoothed_hr = self._get_smoothed_heartrate()
+            final_hr = self._set_multiplied_heartrate(hr, smoothed_hr)
+            self._write_heartrate(final_hr)
+
+    def _write_heartrate(self, hr):
+        """Write the heart rate to the file."""
+        with open(config["Settings"]["heart_rate_file"], "w") as f:
+            f.write(str(hr))
+
+    def _set_multiplied_heartrate(self, hr, smoothed_hr):
+        m_hr = int(smoothed_hr * self._current_ramping_multiplier * self._base_multiplier)
+        time_elapsed = time.monotonic() - self._start_time
+        print(
+            f"HR: {m_hr: 3d} ({hr: 3d} > Smoothed: {smoothed_hr} * Ramp: {self._current_ramping_multiplier: 4.2f} "
+            f"* Base: {self._base_multiplier}) at {time_elapsed:.2f} seconds"
+        )
+        return m_hr
+
+    def _set_current_ramping_multiplier(self):
+        """Set the current ramping multiplier."""
+        if not self._ramping_mode:
+            self._current_ramping_multiplier = 1.0
+            return
+
+        time_elapsed = time.monotonic() - self._start_time
+
+        if time_elapsed >= self._seconds_to_max_ramping:
+            self._current_ramping_multiplier = self._ramping_max_multiplier
+            # print("Ramping multiplier is at max: " + str(self._current_ramping_multiplier))
+            return
+
+        portion_of_max_ramping = time_elapsed / self._seconds_to_max_ramping
+        self._current_ramping_multiplier = self._ramping_max_multiplier * portion_of_max_ramping + 1
+        # print(f"Ramping multiplier: {self._current_ramping_multiplier:.2f} at {time_elapsed:.2f} seconds")
+
+    def _populate_polls_within_interval(self, hr):
+        """Populate the polls within the smoothing interval."""
+        current_time = time.monotonic()
+
+        # Remove all polls that are older than the smoothing interval
+        self._polls_within_interval = [
+            poll for poll in self._polls_within_interval if current_time - poll[0] <= self._smoothing_interval
+        ]
+
+        # Always add the current poll
+        self._polls_within_interval.append((current_time, hr))
 
     def _validate_token(self):
         """Validate token against the API."""
@@ -47,19 +124,44 @@ class Pulsoid:
         )
 
 
+def ensure_config():
+    """Ensure that the config has the correct keys."""
+    if "Login" not in config:
+        config.add_section("Login")
+    if "Settings" not in config:
+        config.add_section("Settings")
+
+    if not config.has_option("Login", "api_token"):
+        config.set("Login", "api_token", "YOUR_API_TOKEN")
+    if not config.has_option("Settings", "heart_rate_file"):
+        config.set("Settings", "heart_rate_file", "heart_rate.txt")
+    if not config.has_option("Settings", "polling_interval"):
+        config.set("Settings", "polling_interval", "0.5")
+    if not config.has_option("Settings", "smoothing_interval"):
+        config.set("Settings", "smoothing_interval", "10")
+    if not config.has_option("Settings", "base_multiplier"):
+        config.set("Settings", "base_multiplier", "1.0")
+    if not config.has_option("Settings", "ramping_mode"):
+        config.set("Settings", "ramping_mode", "True")
+    if not config.has_option("Settings", "ramping_max_multiplier"):
+        config.set("Settings", "ramping_max_multiplier", "3.0")
+    if not config.has_option("Settings", "seconds_till_max_ramping"):
+        config.set("Settings", "seconds_till_max_ramping", "360")
+
+    with open("config.ini", "w") as f:
+        config.write(f)
+
+
 def process_ini_file():
     """Make an empty config.ini file."""
     global config
 
     if config.read("config.ini"):
         print("Config file exists.")
+        ensure_config()
         return
 
-    config["Login"] = {"API_TOKEN": "YOUR_API_TOKEN"}
-    config["Settings"] = {"HEART_RATE_FILE": "heartrate.txt"}
-    with open("config.ini", "w") as f:
-        config.write(f)
-
+    ensure_config()
     print("Config file created. Please edit it and run the program again.")
     exit()
 
@@ -67,7 +169,7 @@ def process_ini_file():
 def save_heart_rate(hr):
     """Save the heart rate to a file, catching exceptions since there might be race conditions."""
     try:
-        with open(config["Settings"]["HEART_RATE_FILE"], "w") as f:
+        with open(config["Settings"]["heart_rate_file"], "w") as f:
             f.write(str(hr))
     except Exception as e:
         print(e)
@@ -83,11 +185,7 @@ def run():
     process_ini_file()
     pulsoid = Pulsoid()
 
-    while True:
-        time.sleep(0.5)
-        if hr := pulsoid.get_heartrate():
-            save_heart_rate(hr)
-            print(hr)
+    pulsoid.run()
 
 
 if __name__ == "__main__":
