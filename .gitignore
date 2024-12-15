@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 config.ini
-heartrate.txt
+heart_rate.txt
