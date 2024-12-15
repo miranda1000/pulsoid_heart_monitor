@@ -17,6 +17,8 @@ git clone https://github.com/Wyko/pagrax_heart_mon.git
 cd pagrax_heart_mon
 ```
 
+Check the [configuration](#configuration) section below to get your API token.
+
 ### Docker usage (recommended)
 
 Go to the `docker` folder, and run `docker compose up -d`
@@ -29,7 +31,7 @@ Install the required packages
 pip install -r requirements.txt
 ```
 
-Check the [configuration](#configuration) section below to get your API token, then run the script
+Run the script
 
 ```bash
 python -m pagmon
