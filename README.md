@@ -4,21 +4,33 @@
 A simple script that checks Pulsoid for heart rate data and injects the current rate into a text file. 
 
 ## Prerequisites
-- Python 3.11 or higher
+- Python 3.11 or higher, or Docker
 - Git
 - A Pulsoid API token
 
 ## Usage
+
 Clone the repository to your computer, then navigate to that folder
+
 ```bash
 git clone https://github.com/Wyko/pagrax_heart_mon.git
 cd pagrax_heart_mon
 ```
+
+### Docker usage (recommended)
+
+Go to the `docker` folder, and run `docker compose up -d`
+
+### Python usage
+
 Install the required packages
+
 ```bash
 pip install -r requirements.txt
 ```
+
 Check the [configuration](#configuration) section below to get your API token, then run the script
+
 ```bash
 python -m pagmon
 ```
