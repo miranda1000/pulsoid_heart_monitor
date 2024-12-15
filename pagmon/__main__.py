@@ -5,6 +5,18 @@ import httpx
 
 config = configparser.ConfigParser(allow_no_value=True)
 
+class HeartRate:
+    def __init__(self, measured_at: int, heart_rate: int):
+        self._measured_at = measured_at
+        self._heart_rate = heart_rate
+
+    @property
+    def measured_at(self) -> int:
+        return self._measured_at
+
+    @property
+    def heart_rate(self) -> int:
+        return self._heart_rate
 
 class Pulsoid:
     def __init__(self):
@@ -35,7 +47,7 @@ class Pulsoid:
         # print(f"Smoothed HR: {average_heartrate} (Avg of {len(self._polls_within_interval)}) polls")
         return average_heartrate
 
-    def get_heartrate(self):
+    def get_heartrate(self) -> HeartRate:
         """Get the current heart rate."""
         try:
             r = self.client.get("https://dev.pulsoid.net/api/v1/data/heart_rate/latest")
@@ -44,19 +56,45 @@ class Pulsoid:
             print(e)
             return None
 
-        return r.json()["data"]["heart_rate"]
+        json_data = r.json()
+        return HeartRate(json_data["measured_at"], json_data["data"]["heart_rate"])
 
     def run(self):
+        output_file_is_csv = (self._get_heart_rate_file_extension() == 'csv')
+        latest_heart_rate_value = None
         while True:
             time.sleep(self._polling_interval)
             if not (hr := self.get_heartrate()):
                 print("Failed to get heart rate.")
                 continue
-            self._set_current_ramping_multiplier()
-            self._populate_polls_within_interval(hr)
-            smoothed_hr = self._get_smoothed_heartrate()
-            final_hr = self._set_multiplied_heartrate(hr, smoothed_hr)
-            self._write_heartrate(final_hr)
+            
+            if not output_file_is_csv:
+                # update the txt file
+                self._set_current_ramping_multiplier()
+                self._populate_polls_within_interval(hr.heart_rate)
+                smoothed_hr = self._get_smoothed_heartrate()
+                final_hr = self._set_multiplied_heartrate(hr.heart_rate, smoothed_hr)
+                self._write_heartrate(final_hr)
+            else:
+                # add entry to the csv file
+                # only append if the got value is different than the last one
+                if hr.heart_rate != latest_heart_rate_value:
+                    self._write_heartrate_csv(hr)
+
+            latest_heart_rate_value = hr.heart_rate
+
+    def _get_heart_rate_file_extension(self) -> str:
+        """Gets the extension of the file specified on the config."""
+        return config["Settings"]["heart_rate_file"].split(".")[-1]
+
+    def _write_heartrate_csv(self, hr: HeartRate):
+        """Write the heart rate to the file."""
+        with open(config["Settings"]["heart_rate_file"], "a+") as f:
+            new_file = (f.tell() == 0)
+            if new_file:
+                # header is needed
+                f.write(f"UNIX millis timestamp;heartrate\n")
+            f.write(f"{hr.measured_at};{hr.heart_rate}\n")
 
     def _write_heartrate(self, hr):
         """Write the heart rate to the file."""

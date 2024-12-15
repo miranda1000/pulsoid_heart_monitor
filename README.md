@@ -37,5 +37,7 @@ HEART_RATE_FILE=my/heart/rate/file.txt
 | `API_TOKEN` | The API token you get from Pulsoid. You can find it by logging into your account and going to the [API page](https://docs.pulsoid.net/access-token-management/manual-token-issuing). |
 | `HEART_RATE_FILE` | The path to the file you want to write the heart rate to. |
 
+If HEART_RATE_FILE is a txt file it will output the latest heartrate; if it is a csv it will log all the values.
+
 ## License
 This project is licensed under the GNU GPLv3 license. See the [LICENSE](LICENSE) file for more information. It's just for my brother anyway :)
