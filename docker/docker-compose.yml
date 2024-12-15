@@ -1,0 +1,10 @@
+services:
+  pulsoid-heart-monitor:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    container_name: pulsoid-heart-monitor
+    volumes:
+      - ../:/app/
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
